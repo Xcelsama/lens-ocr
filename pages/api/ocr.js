@@ -46,14 +46,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Image data is empty.' });
   }
 
+  const progress = { stage: 'starting' };
   try {
-    const { text, confidence } = await withTimeout(runOcr(buffer), REQUEST_TIMEOUT_MS);
-    return res.status(200).json({ text, confidence });
+    const { text, confidence } = await withTimeout(runOcr(buffer, progress), REQUEST_TIMEOUT_MS);
+    return res.status(200).json({ text, confidence, debug: progress });
   } catch (err) {
-    console.error('OCR failed:', err);
+    console.error('OCR failed:', err, progress);
     if (err.message === 'OCR_TIMEOUT') {
-      return res.status(504).json({ error: 'OCR took too long and was cancelled. Try a smaller image.' });
+      return res.status(504).json({
+        error: 'OCR took too long and was cancelled. Try a smaller image.',
+        debug: progress,
+      });
     }
-    return res.status(500).json({ error: 'OCR processing failed.' });
+    return res.status(500).json({ error: 'OCR processing failed.', debug: progress });
   }
 }
