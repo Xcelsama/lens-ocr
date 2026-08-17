@@ -132,7 +132,16 @@ export default function Home() {
         }
 
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'OCR request failed.');
+        if (!res.ok) {
+          const debugSuffix = data.debug
+            ? ` [stage: ${data.debug.stage}${
+                data.debug.workerMs != null
+                  ? `, worker=${data.debug.workerMs}ms preprocess=${data.debug.preprocessMs ?? '-'}ms rotation=${data.debug.rotationMs ?? '-'}ms recognize=${data.debug.recognizeMs ?? '-'}ms`
+                  : ''
+              }]`
+            : '';
+          throw new Error((data.error || 'OCR request failed.') + debugSuffix);
+        }
         setImages((prev) =>
           prev.map((img) =>
             img.id === target.id
