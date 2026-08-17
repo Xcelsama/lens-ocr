@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background-color: #0D1917;
+  color: #F6F3E9;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: #79FFC2;
+  color: #0D1917;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid #79FFC2;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sweep,
+  .animate-blink {
+    animation: none !important;
+  }
+}
+
+/* thin scrollbar for the text output panels */
+.mono-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.mono-scroll::-webkit-scrollbar-thumb {
+  background: #3FBF8F;
+  border-radius: 3px;
+}
+.mono-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
