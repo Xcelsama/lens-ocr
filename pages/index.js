@@ -76,6 +76,7 @@ export default function Home() {
         previewUrl: URL.createObjectURL(file),
         status: 'queued',
         text: '',
+        confidence: null,
         error: '',
       }));
       return [...prev, ...additions];
@@ -122,7 +123,13 @@ export default function Home() {
         setImages((prev) =>
           prev.map((img) =>
             img.id === target.id
-              ? { ...img, status: 'done', text: data.text || '(No text found)', error: '' }
+              ? {
+                  ...img,
+                  status: 'done',
+                  text: data.text || '(No text found)',
+                  confidence: data.confidence ?? null,
+                  error: '',
+                }
               : img
           )
         );
@@ -169,9 +176,9 @@ export default function Home() {
           Pull the text out of your images.
         </h1>
         <p className="mt-3 text-paper-dim max-w-xl">
-          Drop up to {MAX_IMAGES} photos, screenshots, or scans. Each one is read with Google
-          Cloud Vision&apos;s text detection — the same OCR family behind Google Lens — and the
-          results come back as one downloadable .txt file.
+          Drop up to {MAX_IMAGES} photos, screenshots, or scans. Each one is auto-rotated,
+          contrast-corrected, and read with Tesseract.js — then the results come back as one
+          downloadable .txt file.
         </p>
       </div>
 
@@ -246,7 +253,14 @@ export default function Home() {
                 <div key={img.id} className="rounded-xl bg-ink-light border border-ink-lighter overflow-hidden">
                   <div className="px-4 py-2 border-b border-ink-lighter flex items-center justify-between">
                     <p className="font-mono text-xs truncate">{img.name}</p>
-                    <StatusBadge status={img.status} />
+                    <div className="flex items-center gap-2 shrink-0">
+                      {img.status === 'done' && Number.isFinite(img.confidence) && (
+                        <span className="font-mono text-[10px] text-paper-dim">
+                          {img.confidence}% confidence
+                        </span>
+                      )}
+                      <StatusBadge status={img.status} />
+                    </div>
                   </div>
                   {img.status === 'done' ? (
                     <pre className="mono-scroll font-mono text-sm text-paper-dim whitespace-pre-wrap px-4 py-3 max-h-40 overflow-y-auto">
