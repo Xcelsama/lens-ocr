@@ -118,6 +118,19 @@ export default function Home() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ image: base64 }),
         });
+
+        const isJson = res.headers.get('content-type')?.includes('application/json');
+        if (!isJson) {
+          // The platform (not our API code) returned something else —
+          // usually a timeout or gateway error page. Surface a readable
+          // message instead of a JSON-parse crash.
+          throw new Error(
+            res.status === 504 || res.status === 502
+              ? 'Server took too long to respond. Try again or use a smaller image.'
+              : `Unexpected server response (${res.status}).`
+          );
+        }
+
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'OCR request failed.');
         setImages((prev) =>

@@ -6,7 +6,24 @@ export const config = {
       sizeLimit: '8mb',
     },
   },
+  // Pages Router functions default to a short platform timeout on most
+  // hosts; this pipeline (preprocess + OCR, sometimes twice) can run past
+  // that on larger images. Raise it if your host supports per-route config
+  // (e.g. Vercel Pro), and keep the in-code timeout below as a hard backstop
+  // either way so the client always gets JSON back instead of a raw
+  // platform error page.
+  maxDuration: 55,
 };
+
+const REQUEST_TIMEOUT_MS = 45000;
+
+function withTimeout(promise, ms) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('OCR_TIMEOUT')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -30,10 +47,13 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { text, confidence } = await runOcr(buffer);
+    const { text, confidence } = await withTimeout(runOcr(buffer), REQUEST_TIMEOUT_MS);
     return res.status(200).json({ text, confidence });
   } catch (err) {
     console.error('OCR failed:', err);
+    if (err.message === 'OCR_TIMEOUT') {
+      return res.status(504).json({ error: 'OCR took too long and was cancelled. Try a smaller image.' });
+    }
     return res.status(500).json({ error: 'OCR processing failed.' });
   }
 }
