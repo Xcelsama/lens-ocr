@@ -1,35 +1,20 @@
 import { useCallback, useRef, useState } from 'react';
 
 const MAX_IMAGES = 20;
-const MAX_DIMENSION = 1800;
-const CONCURRENCY = 3;
+const CONCURRENCY = 1; // a single tesseract.js worker can only run one recognize() at a time
 
 let idCounter = 0;
 const nextId = () => `img-${Date.now()}-${idCounter++}`;
 
-function fileToResizedBase64(file) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Could not read file.'));
-    reader.onload = () => {
-      img.onerror = () => reject(new Error('Could not decode image.'));
-      img.onload = () => {
-        const scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
-        resolve({ dataUrl, base64: dataUrl.split(',')[1] });
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
+// Lazily created once per page session and reused across every image, so we
+// only pay Tesseract's startup cost once. Loaded via dynamic import so it
+// never gets pulled into the server-side render.
+let workerPromise = null;
+function getWorker() {
+  if (!workerPromise) {
+    workerPromise = import('tesseract.js').then(({ createWorker }) => createWorker('eng'));
+  }
+  return workerPromise;
 }
 
 async function runWithConcurrency(items, limit, worker) {
@@ -112,35 +97,16 @@ export default function Home() {
 
     await runWithConcurrency(targets, CONCURRENCY, async (target) => {
       try {
-        const { base64 } = await fileToResizedBase64(target.file);
-        const res = await fetch('/api/ocr', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64 }),
-        });
-
-        const isJson = res.headers.get('content-type')?.includes('application/json');
-        if (!isJson) {
-          // The platform (not our API code) returned something else —
-          // usually a timeout or gateway error page. Surface a readable
-          // message instead of a JSON-parse crash.
-          throw new Error(
-            res.status === 504 || res.status === 502
-              ? 'Server took too long to respond. Try again or use a smaller image.'
-              : `Unexpected server response (${res.status}).`
-          );
-        }
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'OCR request failed.');
+        const worker = await getWorker();
+        const { data } = await worker.recognize(target.file);
         setImages((prev) =>
           prev.map((img) =>
             img.id === target.id
               ? {
                   ...img,
                   status: 'done',
-                  text: data.text || '(No text found)',
-                  confidence: data.confidence ?? null,
+                  text: data.text?.trim() || '(No text found)',
+                  confidence: Number.isFinite(data.confidence) ? Math.round(data.confidence) : null,
                   error: '',
                 }
               : img
@@ -183,15 +149,15 @@ export default function Home() {
     <div className="min-h-screen bg-ink text-paper font-body pb-28">
       <div className="max-w-4xl mx-auto px-5 pt-10 pb-6">
         <p className="font-mono text-xs tracking-[0.2em] text-scan uppercase mb-3">
-          Batch OCR // client-side upload, zero database
+          Batch OCR // runs in your browser, zero upload
         </p>
         <h1 className="font-display text-4xl sm:text-5xl font-bold leading-tight">
           Pull the text out of your images.
         </h1>
         <p className="mt-3 text-paper-dim max-w-xl">
-          Drop up to {MAX_IMAGES} photos, screenshots, or scans. Each one is auto-rotated,
-          contrast-corrected, and read with Tesseract.js — then the results come back as one
-          downloadable .txt file.
+          Drop up to {MAX_IMAGES} photos, screenshots, or scans. Each one is read directly in
+          your browser with Tesseract.js — nothing is uploaded to a server — then the results
+          come back as one downloadable .txt file.
         </p>
       </div>
 
